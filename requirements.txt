@@ -1,4 +1,5 @@
 crewai
+google-adk
 litellm
 sentence-transformers
 python-dotenv
