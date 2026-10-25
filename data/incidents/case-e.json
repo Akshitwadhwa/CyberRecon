@@ -1,0 +1,57 @@
+{
+  "id": "case-e",
+  "title": "Unlisted destination, no host corroboration",
+  "t_start": "2026-09-10T14:00:00",
+  "t_end": "2026-09-10T14:20:00",
+  "ticket_text": "Network alert: USER-PC connected once to 203.0.113.50, which is not on the corporate allowlist. No endpoint malware alert was raised.",
+  "events": [
+    {
+      "id": "id-40",
+      "timestamp": "2026-09-10T14:02:00",
+      "source": "identity",
+      "event_type": "login_success",
+      "payload": {
+        "user": "anish",
+        "src_ip": "10.0.0.15",
+        "location": "Bengaluru office",
+        "method": "password+mfa"
+      }
+    },
+    {
+      "id": "ep-40",
+      "timestamp": "2026-09-10T14:05:11",
+      "source": "endpoint",
+      "event_type": "process_create",
+      "payload": {
+        "host": "USER-PC",
+        "parent": "explorer.exe",
+        "child": "chrome.exe",
+        "command_line": "chrome.exe"
+      }
+    },
+    {
+      "id": "net-40",
+      "timestamp": "2026-09-10T14:06:02",
+      "source": "network",
+      "event_type": "connection",
+      "payload": {
+        "src_ip": "10.0.0.15",
+        "dst_ip": "203.0.113.50",
+        "dst_port": 443,
+        "protocol": "HTTPS",
+        "bytes": 54000
+      }
+    },
+    {
+      "id": "net-41",
+      "timestamp": "2026-09-10T14:06:03",
+      "source": "network",
+      "event_type": "dns_query",
+      "payload": {
+        "src_ip": "10.0.0.15",
+        "query": "docs-partner.example.test",
+        "answer": "203.0.113.50"
+      }
+    }
+  ]
+}

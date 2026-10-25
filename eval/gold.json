@@ -1,0 +1,37 @@
+{
+  "case-a": {
+    "severity": "low",
+    "must_flag_conflict": false,
+    "must_cite": ["id-1", "ep-1", "net-1"],
+    "must_not_claim": "account takeover",
+    "summary": "Benign office activity. Identity, endpoint, and network agree."
+  },
+  "case-b": {
+    "severity": "high",
+    "must_flag_conflict": true,
+    "must_cite": ["id-10", "ep-11", "net-10"],
+    "likely_story": "Suspicious execution and outbound traffic on an already authenticated session. Identity evidence does not by itself prove credential theft.",
+    "summary": "Endpoint and network are suspicious; identity looks normal. Agents should disagree on account takeover vs session-based activity."
+  },
+  "case-c": {
+    "severity": "high",
+    "must_flag_conflict": true,
+    "must_cite": ["id-20", "id-22"],
+    "likely_story": "Identity-led: geographically implausible second login. Endpoint/network on USER-PC stay quiet, so the story is not the same as case-b.",
+    "summary": "Impossible-travel pattern. Specialists will not all tell the same story."
+  },
+  "case-d": {
+    "severity": "low",
+    "must_flag_conflict": false,
+    "must_cite": ["ep-30", "net-30"],
+    "must_not_claim": "malware",
+    "summary": "Repeated HTTPS is a signed-looking corporate updater to an allowlisted address. Specialists should agree this is benign."
+  },
+  "case-e": {
+    "severity": "medium",
+    "must_flag_conflict": true,
+    "must_cite": ["net-40", "ep-40"],
+    "likely_story": "One connection to an address with no intel record, from Chrome, after a normal office login. Do not name a malware family. Confidence stays limited.",
+    "summary": "Network is mildly unusual. Endpoint and intel do not corroborate. The report must stay uncertain."
+  }
+}

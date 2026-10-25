@@ -1,0 +1,7 @@
+crewai
+litellm
+sentence-transformers
+python-dotenv
+chromadb
+pydantic
+streamlit

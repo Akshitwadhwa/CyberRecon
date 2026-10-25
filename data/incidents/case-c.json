@@ -1,0 +1,71 @@
+{
+  "id": "case-c",
+  "title": "Impossible travel on shared account",
+  "t_start": "2026-09-09T08:00:00",
+  "t_end": "2026-09-09T08:20:00",
+  "ticket_text": "Identity alert: user anish had a successful MFA login from Bengaluru and another success from a US IP 11 minutes later. Endpoint and network on USER-PC look quiet.",
+  "events": [
+    {
+      "id": "id-20",
+      "timestamp": "2026-09-09T08:02:10",
+      "source": "identity",
+      "event_type": "login_success",
+      "payload": {
+        "user": "anish",
+        "src_ip": "10.0.0.15",
+        "location": "Bengaluru office",
+        "method": "password+mfa"
+      }
+    },
+    {
+      "id": "id-21",
+      "timestamp": "2026-09-09T08:13:44",
+      "source": "identity",
+      "event_type": "login_failure",
+      "payload": {
+        "user": "anish",
+        "src_ip": "198.51.100.40",
+        "location": "Ashburn, US",
+        "method": "password"
+      }
+    },
+    {
+      "id": "id-22",
+      "timestamp": "2026-09-09T08:13:58",
+      "source": "identity",
+      "event_type": "login_success",
+      "payload": {
+        "user": "anish",
+        "src_ip": "198.51.100.40",
+        "location": "Ashburn, US",
+        "method": "password+mfa"
+      }
+    },
+    {
+      "id": "ep-20",
+      "timestamp": "2026-09-09T08:04:00",
+      "source": "endpoint",
+      "event_type": "process_create",
+      "payload": {
+        "host": "USER-PC",
+        "parent": "explorer.exe",
+        "child": "outlook.exe",
+        "command_line": "outlook.exe"
+      }
+    },
+    {
+      "id": "net-20",
+      "timestamp": "2026-09-09T08:04:12",
+      "source": "network",
+      "event_type": "connection",
+      "payload": {
+        "src_ip": "10.0.0.15",
+        "dst_ip": "192.0.2.80",
+        "dst_port": 443,
+        "protocol": "HTTPS",
+        "bytes": 2200,
+        "note": "known corp mail"
+      }
+    }
+  ]
+}

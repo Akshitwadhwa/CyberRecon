@@ -1,0 +1,58 @@
+{
+  "id": "case-a",
+  "title": "Routine morning workstation activity",
+  "t_start": "2026-09-09T08:00:00",
+  "t_end": "2026-09-09T09:00:00",
+  "ticket_text": "Helpdesk: user anish reports nothing unusual. Routine check of User-PC after a phishing drill that did not reach this mailbox.",
+  "events": [
+    {
+      "id": "id-1",
+      "timestamp": "2026-09-09T08:10:02",
+      "source": "identity",
+      "event_type": "login_success",
+      "payload": {
+        "user": "anish",
+        "src_ip": "10.0.0.15",
+        "location": "Bengaluru office",
+        "method": "password+mfa"
+      }
+    },
+    {
+      "id": "ep-1",
+      "timestamp": "2026-09-09T08:11:15",
+      "source": "endpoint",
+      "event_type": "process_create",
+      "payload": {
+        "host": "USER-PC",
+        "parent": "explorer.exe",
+        "child": "chrome.exe",
+        "command_line": "chrome.exe https://mail.company.example"
+      }
+    },
+    {
+      "id": "net-1",
+      "timestamp": "2026-09-09T08:11:18",
+      "source": "network",
+      "event_type": "connection",
+      "payload": {
+        "src_ip": "10.0.0.15",
+        "dst_ip": "192.0.2.80",
+        "dst_port": 443,
+        "protocol": "HTTPS",
+        "bytes": 48220,
+        "note": "destination tagged as known SaaS (corp mail)"
+      }
+    },
+    {
+      "id": "net-2",
+      "timestamp": "2026-09-09T08:22:40",
+      "source": "network",
+      "event_type": "dns_query",
+      "payload": {
+        "src_ip": "10.0.0.15",
+        "query": "mail.company.example",
+        "answer": "192.0.2.80"
+      }
+    }
+  ]
+}

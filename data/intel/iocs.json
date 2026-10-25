@@ -1,0 +1,32 @@
+[
+  {
+    "indicator": "203.0.113.88",
+    "indicator_type": "ip",
+    "confidence": "high",
+    "note": "Listed in the lab intel snapshot as a previously reported suspicious HTTPS sinkhole / staging host. Synthetic TEST-NET address for demo only."
+  },
+  {
+    "indicator": "cdn-updates.example.test",
+    "indicator_type": "domain",
+    "confidence": "medium",
+    "note": "Domain seen with 203.0.113.88 in the same intel snapshot. Not a real registrant lookup."
+  },
+  {
+    "indicator": "192.0.2.80",
+    "indicator_type": "ip",
+    "confidence": "benign",
+    "note": "Tagged as known corporate SaaS / mail front-end in the lab allowlist."
+  },
+  {
+    "indicator": "192.0.2.10",
+    "indicator_type": "ip",
+    "confidence": "benign",
+    "note": "Tagged as the corporate software-update service in the lab allowlist."
+  },
+  {
+    "indicator": "updates.company.example",
+    "indicator_type": "domain",
+    "confidence": "benign",
+    "note": "Vendor update hostname that resolves to 192.0.2.10 in the lab snapshot."
+  }
+]

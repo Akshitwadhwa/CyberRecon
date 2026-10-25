@@ -1,0 +1,2 @@
+**Ticket Brief:** Helpdesk: user anish reports nothing unusual. Routine check of User-PC after a phishing drill that did not reach this mailbox.  
+**Time Window:** 2026-09-09T08:00:00 to 2026-09-09T09:00:00

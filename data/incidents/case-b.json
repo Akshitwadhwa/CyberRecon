@@ -1,0 +1,107 @@
+{
+  "id": "case-b",
+  "title": "Suspicious outbound traffic after document open",
+  "t_start": "2026-09-09T10:30:00",
+  "t_end": "2026-09-09T10:40:00",
+  "ticket_text": "SOC alert: User-PC made repeated outbound HTTPS connections to 203.0.113.88. Analyst asks whether this is account takeover or activity on an already-open session.",
+  "events": [
+    {
+      "id": "id-10",
+      "timestamp": "2026-09-09T10:31:05",
+      "source": "identity",
+      "event_type": "login_success",
+      "payload": {
+        "user": "anish",
+        "src_ip": "10.0.0.15",
+        "location": "Bengaluru office",
+        "method": "password+mfa",
+        "note": "same campus IP as typical workday logins"
+      }
+    },
+    {
+      "id": "ep-10",
+      "timestamp": "2026-09-09T10:32:01",
+      "source": "endpoint",
+      "event_type": "process_create",
+      "payload": {
+        "host": "USER-PC",
+        "parent": "explorer.exe",
+        "child": "WINWORD.EXE",
+        "command_line": "WINWORD.EXE C:\\\\Users\\\\anish\\\\Downloads\\\\Q3-review.docx"
+      }
+    },
+    {
+      "id": "ep-11",
+      "timestamp": "2026-09-09T10:32:14",
+      "source": "endpoint",
+      "event_type": "process_create",
+      "payload": {
+        "host": "USER-PC",
+        "parent": "WINWORD.EXE",
+        "child": "powershell.exe",
+        "command_line": "powershell.exe -NoProfile -WindowStyle Hidden"
+      }
+    },
+    {
+      "id": "ep-12",
+      "timestamp": "2026-09-09T10:32:51",
+      "source": "endpoint",
+      "event_type": "file_create",
+      "payload": {
+        "host": "USER-PC",
+        "path": "C:\\\\Users\\\\anish\\\\AppData\\\\Local\\\\Temp\\\\update-check.exe",
+        "created_by": "powershell.exe"
+      }
+    },
+    {
+      "id": "net-10",
+      "timestamp": "2026-09-09T10:33:08",
+      "source": "network",
+      "event_type": "connection",
+      "payload": {
+        "src_ip": "10.0.0.15",
+        "dst_ip": "203.0.113.88",
+        "dst_port": 443,
+        "protocol": "HTTPS",
+        "bytes": 1204
+      }
+    },
+    {
+      "id": "net-11",
+      "timestamp": "2026-09-09T10:33:41",
+      "source": "network",
+      "event_type": "connection",
+      "payload": {
+        "src_ip": "10.0.0.15",
+        "dst_ip": "203.0.113.88",
+        "dst_port": 443,
+        "protocol": "HTTPS",
+        "bytes": 8890
+      }
+    },
+    {
+      "id": "net-12",
+      "timestamp": "2026-09-09T10:34:12",
+      "source": "network",
+      "event_type": "connection",
+      "payload": {
+        "src_ip": "10.0.0.15",
+        "dst_ip": "203.0.113.88",
+        "dst_port": 443,
+        "protocol": "HTTPS",
+        "bytes": 15602
+      }
+    },
+    {
+      "id": "net-13",
+      "timestamp": "2026-09-09T10:34:15",
+      "source": "network",
+      "event_type": "dns_query",
+      "payload": {
+        "src_ip": "10.0.0.15",
+        "query": "cdn-updates.example.test",
+        "answer": "203.0.113.88"
+      }
+    }
+  ]
+}
