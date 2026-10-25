@@ -1,6 +1,5 @@
 # CyberRecon
 
-Multi-agent investigation copilot for CSE3101. Analysts get an evidence-backed report: what happened, which event IDs support it, where sources conflict, most likely explanation, recommended human response.
 
 Evidence is **synthetic labeled cases** in SQLite. There is no live SOC, no attacker lab, and no offensive tooling.
 
