@@ -5,6 +5,7 @@
   python main.py demo case-b
   python main.py demo case-b --failure-demo
   python main.py investigate case-b
+  python main.py adk case-b
 """
 
 from __future__ import annotations
@@ -30,6 +31,9 @@ def main() -> None:
     inv = sub.add_parser("investigate", help="Run the CrewAI crew (needs OPENAI_API_KEY)")
     inv.add_argument("incident_id", nargs="?", default="case-b")
 
+    adk = sub.add_parser("adk", help="Run the ADK pipeline and print session state")
+    adk.add_argument("incident_id", nargs="?", default="case-b")
+
     args = parser.parse_args()
 
     if args.cmd == "ingest":
@@ -53,6 +57,15 @@ def main() -> None:
         text, folder = investigate(args.incident_id)
         print(text)
         print(f"\nSaved run: {folder}")
+        return
+
+    if args.cmd == "adk":
+        import asyncio
+
+        sys.path.insert(0, str(ROOT))
+        from adk_app.agent_session_runner import run_investigation
+
+        asyncio.run(run_investigation(args.incident_id))
 
 
 if __name__ == "__main__":
