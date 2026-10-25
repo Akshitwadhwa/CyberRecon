@@ -4,6 +4,10 @@ CyberRecon is a multi-agent investigation assistant. When a security incident co
 
 The system does not block hosts, change firewalls, or run attacks. It only reads a local evidence store and writes an assessment.
 
+## Agents
+
+![CyberRecon agents: coordinator, network, endpoint, identity, and reconciler feed the incident report writer](docs/agents.jpg)
+
 ## How an investigation runs
 
 1. A case is loaded from JSON into SQLite.
