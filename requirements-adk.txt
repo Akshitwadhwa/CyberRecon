@@ -1,0 +1,7 @@
+# Google ADK profile. Keep this environment separate from requirements-crewai.txt:
+# Google ADK 2.13.0 requires OpenTelemetry >=1.39,<=1.44.
+-r requirements-common.txt
+google-adk==2.13.0
+litellm==1.106.4
+opentelemetry-api==1.44.0
+opentelemetry-sdk==1.44.0

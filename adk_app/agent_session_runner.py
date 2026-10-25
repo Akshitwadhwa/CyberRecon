@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import uuid
 from datetime import datetime
@@ -24,11 +25,13 @@ sys.path.insert(0, str(ROOT / "src"))
 from adk_app.agent import root_agent  # noqa: E402
 from cyberrecon.guardrails import assert_grounded  # noqa: E402
 from cyberrecon.ingest import run as ingest  # noqa: E402
+from cyberrecon.a2a_client import invoke_crewai  # noqa: E402
 
 APP_NAME = "cyberrecon_adk"
 USER_ID = "analyst"
 STATE_KEYS = (
     "incident_id",
+    "crewai_findings",
     "ticket_brief",
     "network_findings",
     "endpoint_findings",
@@ -51,13 +54,22 @@ def _text_from_event(event) -> str:
 
 async def run_investigation(incident_id: str) -> Path:
     ingest()
+    initial_state = {"incident_id": incident_id}
+    crewai_a2a_url = os.getenv("CREWAI_A2A_URL", "").strip()
+    if crewai_a2a_url:
+        findings = invoke_crewai(
+            crewai_a2a_url,
+            incident_id,
+        )
+        initial_state["crewai_findings"] = findings.model_dump(mode="json")
+        print(f"Received CrewAI findings over A2A: {len(findings.evidence)} evidence references")
     session_service = InMemorySessionService()
     session_id = str(uuid.uuid4())
     await session_service.create_session(
         app_name=APP_NAME,
         user_id=USER_ID,
         session_id=session_id,
-        state={"incident_id": incident_id},
+        state=initial_state,
     )
     runner = Runner(agent=root_agent, app_name=APP_NAME, session_service=session_service)
     message = types.Content(

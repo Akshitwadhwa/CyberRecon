@@ -21,7 +21,7 @@ On **2026-09-09**, the user "anish" logged into their account using password and
 While the identity findings suggest legitimate user activity, the endpoint findings raise concerns about the execution of powershell and the creation of a suspicious executable. The network findings reinforce this concern by showing connections to a known suspicious IP. Thus, there is a discrepancy between the legitimacy of the login and the potentially malicious activities that followed.
 
 ### Most likely explanation
-The user "anish" was logged in legitimately, but the activation of **powershell.exe** and the creation of the **update-check.exe** may indicate an exploitation of their credentials or unintentional initiation of a malicious process. The outbound connections to a suspicious IP suggest an ongoing threat, possibly indicating data exfiltration or communication with a malicious entity.
+The user "anish" was logged in legitimately, but the activation of **powershell.exe**, creation of **update-check.exe**, and subsequent outbound connections are suspicious behavior during an already-authenticated session. The evidence does not establish credential theft, account takeover, or transfer of data, so the exact cause remains uncertain.
 
 ### Recommended response
 Investigate the contents and functionality of the **update-check.exe** executable to determine its nature. Conduct a thorough malware assessment on the user's endpoint to identify any compromise. Additionally, consider monitoring and auditing the user's account for unusual activities and implement heightened security measures to prevent further incidents.
