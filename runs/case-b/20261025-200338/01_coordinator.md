@@ -1,0 +1,2 @@
+**Ticket Brief:** SOC alert: User-PC made repeated outbound HTTPS connections to 203.0.113.88. Analyst asks whether this is account takeover or activity on an already-open session.  
+**Time Window:** 2026-09-09T10:30:00 to 2026-09-09T10:40:00

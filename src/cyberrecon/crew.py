@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from crewai import LLM, Agent, Crew, Process, Task
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 from cyberrecon.guardrails import assert_grounded
 from cyberrecon.tools import GetEventsTool, GetIntelTool, GetTicketTool
@@ -26,12 +26,20 @@ TASK_FILES = (
 
 
 def _llm() -> LLM:
-    load_dotenv(ROOT / ".env")
     load_dotenv(ROOT.parent / ".env")
+    project_env = ROOT / ".env"
+    project_values = dotenv_values(project_env)
+    load_dotenv(project_env, override=True)
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise ValueError("Add OPENAI_API_KEY to Project/.env (see .env.example)")
     model = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    key_source = str(project_env) if project_values.get("OPENAI_API_KEY") else "process environment"
+    print(
+        "LLM configuration: "
+        f"key_source={key_source} key_prefix={api_key[:7]} "
+        f"key_length={len(api_key)} model={model}"
+    )
     return LLM(model=model, api_key=api_key, temperature=0.2)
 
 

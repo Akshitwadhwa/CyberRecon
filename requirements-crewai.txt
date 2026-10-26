@@ -1,0 +1,7 @@
+# CrewAI profile. Keep this environment separate from requirements-adk.txt:
+# CrewAI 1.15.30 requires OpenTelemetry >=1.45.1,<2.
+-r requirements-common.txt
+crewai==1.15.30
+litellm==1.106.4
+opentelemetry-api==1.45.1
+opentelemetry-sdk==1.45.1

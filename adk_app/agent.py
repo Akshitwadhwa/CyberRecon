@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 from google.adk.agents import LlmAgent
 from google.adk.agents.sequential_agent import SequentialAgent
 from google.adk.models.lite_llm import LiteLlm
@@ -14,8 +14,18 @@ from google.adk.models.lite_llm import LiteLlm
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-load_dotenv(ROOT / ".env")
 load_dotenv(ROOT.parent / ".env")
+PROJECT_ENV = ROOT / ".env"
+
+
+def _load_project_environment(project_root: Path = ROOT) -> dict[str, str | None]:
+    """Load the project environment after any parent/process defaults."""
+    project_env = project_root / ".env"
+    load_dotenv(project_env, override=True)
+    return {key: value for key, value in dotenv_values(project_env).items()}
+
+
+PROJECT_ENV_VALUES = _load_project_environment()
 
 from cyberrecon.queries import events_text, intel_text, ticket_text  # noqa: E402
 
@@ -24,6 +34,15 @@ def _model() -> LiteLlm:
     name = os.getenv("LLM_MODEL", "gpt-4o-mini").strip()
     if "/" not in name:
         name = f"openai/{name}"
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("Add OPENAI_API_KEY to the project .env before starting ADK")
+    key_source = str(PROJECT_ENV) if PROJECT_ENV_VALUES.get("OPENAI_API_KEY") else "process environment"
+    print(
+        "ADK LLM configuration: "
+        f"key_source={key_source} key_prefix={api_key[:7]} "
+        f"key_length={len(api_key)} model={name}"
+    )
     return LiteLlm(model=name)
 
 
@@ -142,6 +161,8 @@ report_writer = LlmAgent(
     include_contents="none",
     instruction="""Write the final assessment from session state only. Do not invent event ids.
 Do not claim a host was blocked.
+Do not infer credential exploitation, account takeover, data exfiltration, or a named malware family unless the cited evidence explicitly establishes it.
+When identity shows a normal MFA login from the usual office while endpoint or network activity is suspicious, describe suspicious behavior during an already-authenticated session and state the remaining uncertainty.
 
 Reconciliation:
 {reconciliation}
