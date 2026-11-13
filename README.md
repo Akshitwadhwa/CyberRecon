@@ -65,3 +65,13 @@ python main.py investigate case-b
 ```
 
 `demo` prints the ticket, events, and intel lookups without calling a model. `investigate` runs the six agents and writes a folder under `runs/`.
+
+$env:LITELLM_LOCAL_MODEL_COST_MAP = "True"
+$env:PYTHONPATH = "$PWD\src"
+.\.venv-crewai\Scripts\python.exe -u -B -m cyberrecon.crewai_a2a
+
+$env:CREWAI_A2A_URL = "http://127.0.0.1:8765"
+$env:PYTHONPATH = "$PWD\src;$PWD"
+$env:LITELLM_LOCAL_MODEL_COST_MAP = "True"
+
+.\.venv-adk\Scripts\python.exe -u -B .\main.py adk case-b

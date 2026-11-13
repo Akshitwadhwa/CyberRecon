@@ -10,6 +10,8 @@ from dotenv import dotenv_values, load_dotenv
 from google.adk.agents import LlmAgent
 from google.adk.agents.sequential_agent import SequentialAgent
 from google.adk.models.lite_llm import LiteLlm
+from google.adk.tools.mcp_tool import McpToolset, StdioConnectionParams
+from mcp import StdioServerParameters
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -27,7 +29,7 @@ def _load_project_environment(project_root: Path = ROOT) -> dict[str, str | None
 
 PROJECT_ENV_VALUES = _load_project_environment()
 
-from cyberrecon.queries import events_text, intel_text, ticket_text  # noqa: E402
+from cyberrecon.queries import ticket_text  # noqa: E402
 
 
 def _model() -> LiteLlm:
@@ -51,17 +53,30 @@ def get_ticket(incident_id: str) -> str:
     return ticket_text(incident_id)
 
 
-def get_events(incident_id: str, source: str) -> str:
-    """Return evidence rows for one incident. source is network, endpoint, or identity."""
-    return events_text(incident_id, source)
-
-
-def get_intel(indicator: str) -> str:
-    """Look up one IP address or domain in the local intel snapshot."""
-    return intel_text(indicator)
+def create_mcp_toolset() -> McpToolset:
+    """Create the shared ADK connection to CyberRecon's local MCP server."""
+    pythonpath = os.pathsep.join(
+        value
+        for value in (str(ROOT / "src"), str(ROOT), os.getenv("PYTHONPATH", ""))
+        if value
+    )
+    mcp_env = dict(os.environ)
+    mcp_env["PYTHONPATH"] = pythonpath
+    return McpToolset(
+        connection_params=StdioConnectionParams(
+            server_params=StdioServerParameters(
+                command=sys.executable,
+                args=["-m", "cyberrecon.mcp_server"],
+                cwd=str(ROOT),
+                env=mcp_env,
+            ),
+            timeout=30.0,
+        )
+    )
 
 
 MODEL = _model()
+MCP_TOOLSET = create_mcp_toolset()
 
 coordinator = LlmAgent(
     name="InvestigationCoordinator",
@@ -86,12 +101,12 @@ Incident id: {incident_id}
 Ticket:
 {ticket_brief}
 
-Call get_events with that incident id and source network.
-For every destination IP or domain in those rows, call get_intel.
+Call get_incident_events with that incident id and source network.
+For every destination IP or domain in those rows, call lookup_threat_intel.
 Quote every event id you use. Use only tool results.
 Do not decide whether the account was stolen. Report connections and intel only.
 """,
-    tools=[get_events, get_intel],
+    tools=[MCP_TOOLSET],
     output_key="network_findings",
 )
 
@@ -104,11 +119,11 @@ Incident id: {incident_id}
 Ticket:
 {ticket_brief}
 
-Call get_events with that incident id and source endpoint before you answer.
+Call get_incident_events with that incident id and source endpoint before you answer.
 Describe only process and file rows from that tool. Quote those event ids.
 Do not discuss network connections or login locations.
 """,
-    tools=[get_events],
+    tools=[MCP_TOOLSET],
     include_contents="none",
     output_key="endpoint_findings",
 )
@@ -122,11 +137,11 @@ Incident id: {incident_id}
 Ticket:
 {ticket_brief}
 
-Call get_events with that incident id and source identity before you answer.
+Call get_incident_events with that incident id and source identity before you answer.
 Describe only login rows from that tool. Quote those event ids.
 Do not discuss processes or outbound connections.
 """,
-    tools=[get_events],
+    tools=[MCP_TOOLSET],
     include_contents="none",
     output_key="identity_findings",
 )
