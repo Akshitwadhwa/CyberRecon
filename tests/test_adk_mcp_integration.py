@@ -38,6 +38,10 @@ def test_adk_discovers_and_invokes_both_real_stdio_mcp_tools():
             assert {tool.name for tool in tools} == {
                 "get_incident_events",
                 "lookup_threat_intel",
+                "search_attack_techniques",
+                "get_attack_technique",
+                "get_attack_mitigations",
+                "get_attack_tactics",
             }
 
             # The call goes through ADK's session manager and the live stdio
@@ -51,9 +55,15 @@ def test_adk_discovers_and_invokes_both_real_stdio_mcp_tools():
                 "lookup_threat_intel",
                 {"indicator": "203.0.113.88"},
             )
+            attack = await session.call_tool(
+                "get_attack_technique",
+                {"technique_id": "T1059.001"},
+            )
             assert events.structured_content["incident_id"] == "case-b"
             assert len(events.structured_content["events"]) == 4
             assert intel.structured_content["found"] is True
+            assert attack.structured_content["technique"]["attack_id"] == "T1059.001"
+            assert attack.structured_content["parent"]["attack_id"] == "T1059"
         finally:
             await toolset.close()
 

@@ -43,3 +43,65 @@ class ThreatIntelResult(BaseModel):
     indicator: str = Field(min_length=1)
     found: bool
     record: ThreatIntelRecord | None = None
+
+
+class AttackTechnique(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attack_id: str = Field(min_length=2)
+    name: str = Field(min_length=1)
+    description: str
+    tactics: list[str]
+    tactic_ids: list[str]
+    is_subtechnique: bool
+    parent_id: str | None = None
+    mitigation_ids: list[str] = Field(default_factory=list)
+    references: list[str] = Field(default_factory=list)
+
+
+class AttackSearchResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1)
+    matches: list[AttackTechnique]
+
+
+class AttackTechniqueResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attack_id: str = Field(min_length=2)
+    found: bool
+    technique: AttackTechnique | None = None
+    parent: AttackTechnique | None = None
+
+
+class AttackMitigation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attack_id: str = Field(min_length=2)
+    name: str = Field(min_length=1)
+    description: str
+    references: list[str] = Field(default_factory=list)
+
+
+class AttackMitigationsResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    technique_id: str = Field(min_length=2)
+    mitigations: list[AttackMitigation]
+
+
+class AttackTactic(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attack_id: str = Field(min_length=2)
+    name: str = Field(min_length=1)
+    description: str
+    technique_ids: list[str]
+    references: list[str] = Field(default_factory=list)
+
+
+class AttackTacticsResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tactics: list[AttackTactic]

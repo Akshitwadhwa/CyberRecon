@@ -36,14 +36,18 @@ async def _mcp_call(name: str, arguments: dict):
             return tools, result
 
 
-def test_mcp_server_startup_and_exact_tool_discovery() -> None:
+def test_mcp_server_startup_and_tool_discovery() -> None:
     ingest()
     tools, _result = asyncio.run(_mcp_call("lookup_threat_intel", {"indicator": "missing.test"}))
     assert {tool.name for tool in tools.tools} == {
         "get_incident_events",
         "lookup_threat_intel",
+        "search_attack_techniques",
+        "get_attack_technique",
+        "get_attack_mitigations",
+        "get_attack_tactics",
     }
-    assert len(tools.tools) == 2
+    assert len(tools.tools) == 6
 
 
 def test_mcp_input_schemas_are_published() -> None:
@@ -56,6 +60,8 @@ def test_mcp_input_schemas_are_published() -> None:
     assert events_schema["required"] == ["incident_id"]
     assert intel_schema["required"] == ["indicator"]
     assert intel_schema["properties"]["indicator"]["maxLength"] == 512
+    assert by_name["search_attack_techniques"].input_schema["required"] == ["query"]
+    assert by_name["get_attack_technique"].input_schema["required"] == ["technique_id"]
 
 
 def test_get_incident_events_returns_all_case_b_events() -> None:
@@ -132,3 +138,36 @@ def test_invalid_inputs_return_safe_mcp_errors() -> None:
         text = str(result.content)
         assert "OPENAI_API_KEY" not in text
         assert "C:\\Users" not in text
+
+
+def test_attack_tools_return_structured_local_results() -> None:
+    ingest()
+    _tools, search = asyncio.run(
+        _mcp_call("search_attack_techniques", {"query": "PowerShell"})
+    )
+    _tools, technique = asyncio.run(
+        _mcp_call("get_attack_technique", {"technique_id": "T1059.001"})
+    )
+    _tools, mitigations = asyncio.run(
+        _mcp_call("get_attack_mitigations", {"technique_id": "T1059.001"})
+    )
+    _tools, tactics = asyncio.run(_mcp_call("get_attack_tactics", {}))
+    assert search.structured_content["matches"]
+    assert any(item["attack_id"] == "T1059.001" for item in search.structured_content["matches"])
+    assert technique.structured_content["found"] is True
+    assert technique.structured_content["technique"]["attack_id"] == "T1059.001"
+    assert technique.structured_content["parent"]["attack_id"] == "T1059"
+    assert mitigations.structured_content["mitigations"]
+    assert len(tactics.structured_content["tactics"]) == 15
+
+
+def test_attack_tools_reject_unknown_and_invalid_ids() -> None:
+    _tools, unknown = asyncio.run(
+        _mcp_call("get_attack_technique", {"technique_id": "T9999"})
+    )
+    _tools, bad = asyncio.run(
+        _mcp_call("get_attack_mitigations", {"technique_id": "../../secret"})
+    )
+    assert unknown.structured_content["attack_id"] == "T9999"
+    assert unknown.structured_content["found"] is False
+    assert bad.is_error is True

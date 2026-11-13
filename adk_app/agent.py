@@ -103,6 +103,9 @@ Ticket:
 
 Call get_incident_events with that incident id and source network.
 For every destination IP or domain in those rows, call lookup_threat_intel.
+When useful, use the local ATT&CK tools to research candidate techniques for observed behavior.
+ATT&CK matches are reference candidates only: never mark a technique confirmed from a keyword alone.
+If you suggest a candidate, cite the incident event ids and explain the evidence-based reasoning.
 Quote every event id you use. Use only tool results.
 Do not decide whether the account was stolen. Report connections and intel only.
 """,
@@ -120,6 +123,8 @@ Ticket:
 {ticket_brief}
 
 Call get_incident_events with that incident id and source endpoint before you answer.
+You may use the local ATT&CK tools to research candidate techniques such as process or script execution.
+Do not claim a technique is confirmed from a keyword match; tie any candidate to observed event ids and reasoning.
 Describe only process and file rows from that tool. Quote those event ids.
 Do not discuss network connections or login locations.
 """,

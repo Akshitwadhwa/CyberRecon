@@ -4,6 +4,7 @@
 .venv/
 .venv-adk/
 .venv-crewai/
+.venv-rag/
 env/
 venv/
 __pycache__/
