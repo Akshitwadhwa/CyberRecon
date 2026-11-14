@@ -1,0 +1,9 @@
+{
+  "attack_version": "20.1",
+  "collection_name": "mitre_attack_enterprise",
+  "dataset_sha256": "ff1ac5245572e1057b6ae162947fe8a8916c5c4d42026c8010d43604496ecf6a",
+  "document_count": 718,
+  "embedding_dimensions": 384,
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "schema_version": "1"
+}

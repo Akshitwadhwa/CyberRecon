@@ -1,0 +1,7 @@
+# Isolated local RAG profile. Keep this environment separate from ADK and CrewAI.
+python-dotenv==1.2.4
+pydantic==2.12.5
+pytest==8.4.2
+mcp==2.3.0
+sentence-transformers==5.1.2
+chromadb==1.5.9
