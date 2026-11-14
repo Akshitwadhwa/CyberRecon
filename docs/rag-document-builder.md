@@ -14,6 +14,11 @@ Detection guidance is included only when the source object provides it.
 This phase does not create embeddings, write a vector database, expose an MCP
 tool, or change the ADK/CrewAI/A2A workflow.
 
+Phase 4.3 adds `cyberrecon.rag.index.build_mitre_index()` and the
+`scripts/build_mitre_index.py` command. It writes the persistent index to
+`data/rag/chroma/` and its reproducibility manifest to
+`data/rag/manifest.json`.
+
 Example:
 
 ```powershell

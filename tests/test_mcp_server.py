@@ -13,6 +13,7 @@ from cyberrecon.ingest import run as ingest
 from cyberrecon.paths import DB_PATH
 
 ROOT = Path(__file__).resolve().parents[1]
+MCP_TEST_TIMEOUT_SECONDS = float(os.environ.get("MCP_TEST_TIMEOUT_SECONDS", "90"))
 
 
 def _db_digest() -> str:
@@ -20,20 +21,21 @@ def _db_digest() -> str:
 
 
 async def _mcp_call(name: str, arguments: dict):
-    env = dict(os.environ)
-    env["PYTHONPATH"] = str(ROOT / "src")
-    params = StdioServerParameters(
-        command=sys.executable,
-        args=["-m", "cyberrecon.mcp_server"],
-        cwd=ROOT,
-        env=env,
-    )
-    async with stdio_client(params) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            tools = await session.list_tools()
-            result = await session.call_tool(name, arguments)
-            return tools, result
+    async with asyncio.timeout(MCP_TEST_TIMEOUT_SECONDS):
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(ROOT / "src")
+        params = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "cyberrecon.mcp_server"],
+            cwd=ROOT,
+            env=env,
+        )
+        async with stdio_client(params) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                tools = await session.list_tools()
+                result = await session.call_tool(name, arguments)
+                return tools, result
 
 
 def test_mcp_server_startup_and_tool_discovery() -> None:
@@ -46,8 +48,9 @@ def test_mcp_server_startup_and_tool_discovery() -> None:
         "get_attack_technique",
         "get_attack_mitigations",
         "get_attack_tactics",
+        "search_attack_knowledge",
     }
-    assert len(tools.tools) == 6
+    assert len(tools.tools) == 7
 
 
 def test_mcp_input_schemas_are_published() -> None:
@@ -62,6 +65,9 @@ def test_mcp_input_schemas_are_published() -> None:
     assert intel_schema["properties"]["indicator"]["maxLength"] == 512
     assert by_name["search_attack_techniques"].input_schema["required"] == ["query"]
     assert by_name["get_attack_technique"].input_schema["required"] == ["technique_id"]
+    knowledge_schema = by_name["search_attack_knowledge"].input_schema
+    assert knowledge_schema["required"] == ["query"]
+    assert set(knowledge_schema["properties"]) == {"query", "top_k", "tactic_id", "technique_id"}
 
 
 def test_get_incident_events_returns_all_case_b_events() -> None:

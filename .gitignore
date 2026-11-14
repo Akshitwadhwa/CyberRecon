@@ -18,5 +18,6 @@ runs/
 .crewai_storage/
 db/*.db
 .chroma/
+data/rag/chroma/
 data/photos/
 .DS_Store

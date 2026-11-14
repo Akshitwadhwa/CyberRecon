@@ -23,19 +23,24 @@ from cyberrecon.mcp_server.models import (
     AttackTacticsResult,
     AttackTechnique,
     AttackTechniqueResult,
+    AttackKnowledgeItem,
+    AttackKnowledgeSearchResult,
 )
 from cyberrecon.mcp_server.mitre import MitreDataError, load_catalog
+from cyberrecon.rag.retrieval import RetrievalError, search_attack_knowledge as retrieve_attack_knowledge
 from cyberrecon.store import connect, get_events, get_incident, get_intel
 
 _INCIDENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 _ALLOWED_SOURCES = {"network", "endpoint", "identity", "alert_image"}
 _ATTACK_TECHNIQUE_RE = re.compile(r"^T\d{4}(?:\.\d{3})?$", re.IGNORECASE)
+_ATTACK_TACTIC_RE = re.compile(r"^TA\d{4}$", re.IGNORECASE)
 AttackQuery = Annotated[str, Field(min_length=1, max_length=256)]
 AttackTechniqueId = Annotated[
     str,
     Field(min_length=5, max_length=9, pattern=r"^T\d{4}(?:\.\d{3})?$"),
 ]
 AttackLimit = Annotated[int, Field(ge=1, le=50)]
+AttackTacticId = Annotated[str, Field(min_length=6, max_length=6, pattern=r"^TA\d{4}$")]
 
 
 def _validate_incident_id(incident_id: str) -> str:
@@ -173,6 +178,40 @@ def get_attack_tactics() -> AttackTacticsResult:
     return AttackTacticsResult(tactics=[AttackTactic.model_validate(item) for item in tactics])
 
 
+def search_attack_knowledge(
+    query: AttackQuery,
+    top_k: AttackLimit = 5,
+    tactic_id: AttackTacticId | None = None,
+    technique_id: AttackTechniqueId | None = None,
+) -> AttackKnowledgeSearchResult:
+    """Search persisted MITRE ATT&CK knowledge without confirming incident mappings."""
+    value = query.strip()
+    if not value:
+        raise ValueError("query must not be empty")
+    if tactic_id is not None:
+        tactic_value = tactic_id.strip().upper()
+        if not _ATTACK_TACTIC_RE.fullmatch(tactic_value):
+            raise ValueError("tactic_id must be an ATT&CK tactic id such as TA0002")
+    else:
+        tactic_value = None
+    technique_value = _validate_attack_id(technique_id) if technique_id is not None else None
+    try:
+        matches = retrieve_attack_knowledge(
+            value,
+            top_k=top_k,
+            tactic_id=tactic_value,
+            technique_id=technique_value,
+        )
+    except RetrievalError as exc:
+        raise ValueError("MITRE ATT&CK knowledge index is unavailable") from exc
+    except ValueError:
+        raise
+    return AttackKnowledgeSearchResult(
+        query=value,
+        results=[AttackKnowledgeItem.model_validate(match.__dict__) for match in matches],
+    )
+
+
 def create_server() -> MCPServer:
     """Create the read-only evidence, intel, and ATT&CK MCP tools."""
     server = MCPServer(
@@ -213,4 +252,12 @@ def create_server() -> MCPServer:
         description="Retrieve local MITRE ATT&CK tactics and technique IDs.",
         structured_output=True,
     )(get_attack_tactics)
+    server.tool(
+        name="search_attack_knowledge",
+        description=(
+            "Search persisted MITRE ATT&CK knowledge. Results are reference knowledge with raw "
+            "retrieval distances, not incident evidence or confidence scores."
+        ),
+        structured_output=True,
+    )(search_attack_knowledge)
     return server

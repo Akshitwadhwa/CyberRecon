@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 
 from adk_app.agent import (
+    IDENTITY_MCP_TOOLSET,
     MCP_TOOLSET,
     create_mcp_toolset,
     endpoint_agent,
@@ -42,6 +43,7 @@ def test_adk_discovers_and_invokes_both_real_stdio_mcp_tools():
                 "get_attack_technique",
                 "get_attack_mitigations",
                 "get_attack_tactics",
+                "search_attack_knowledge",
             }
 
             # The call goes through ADK's session manager and the live stdio
@@ -59,19 +61,49 @@ def test_adk_discovers_and_invokes_both_real_stdio_mcp_tools():
                 "get_attack_technique",
                 {"technique_id": "T1059.001"},
             )
+            knowledge = await session.call_tool(
+                "search_attack_knowledge",
+                {"query": "PowerShell command execution", "top_k": 5},
+            )
             assert events.structured_content["incident_id"] == "case-b"
             assert len(events.structured_content["events"]) == 4
             assert intel.structured_content["found"] is True
             assert attack.structured_content["technique"]["attack_id"] == "T1059.001"
             assert attack.structured_content["parent"]["attack_id"] == "T1059"
+            assert any(
+                item["technique_id"] == "T1059.001"
+                for item in knowledge.structured_content["results"]
+            )
         finally:
             await toolset.close()
 
     _run(scenario())
 
 
-def test_evidence_agents_share_mcp_toolset_and_a2a_state_contract():
-    assert all(MCP_TOOLSET in agent.tools for agent in (network_agent, endpoint_agent, identity_agent))
+def test_only_network_and_endpoint_receive_rag_mcp_tool():
+    assert MCP_TOOLSET in network_agent.tools
+    assert MCP_TOOLSET in endpoint_agent.tools
+    assert IDENTITY_MCP_TOOLSET in identity_agent.tools
+    assert IDENTITY_MCP_TOOLSET not in network_agent.tools
+    assert IDENTITY_MCP_TOOLSET not in endpoint_agent.tools
     assert callable(invoke_crewai)
     assert "crewai_findings" in STATE_KEYS
+
+
+def test_identity_mcp_toolset_excludes_rag_tool():
+    async def scenario():
+        try:
+            identity_tools = await IDENTITY_MCP_TOOLSET.get_tools()
+            assert {tool.name for tool in identity_tools} == {
+                "get_incident_events",
+                "lookup_threat_intel",
+                "search_attack_techniques",
+                "get_attack_technique",
+                "get_attack_mitigations",
+                "get_attack_tactics",
+            }
+        finally:
+            await IDENTITY_MCP_TOOLSET.close()
+
+    _run(scenario())
 

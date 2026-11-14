@@ -105,3 +105,24 @@ class AttackTacticsResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     tactics: list[AttackTactic]
+
+
+class AttackKnowledgeItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    technique_id: str = Field(min_length=2)
+    name: str = Field(min_length=1)
+    parent_id: str | None = None
+    tactics: list[str]
+    description: str
+    detection_guidance: str
+    mitigations: list[str]
+    references: list[str]
+    distance: float
+
+
+class AttackKnowledgeSearchResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1)
+    results: list[AttackKnowledgeItem]

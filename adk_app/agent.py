@@ -29,6 +29,18 @@ def _load_project_environment(project_root: Path = ROOT) -> dict[str, str | None
 
 PROJECT_ENV_VALUES = _load_project_environment()
 
+MCP_TOOL_NAMES = [
+    "get_incident_events",
+    "lookup_threat_intel",
+    "search_attack_techniques",
+    "get_attack_technique",
+    "get_attack_mitigations",
+    "get_attack_tactics",
+    "search_attack_knowledge",
+]
+IDENTITY_TOOL_NAMES = MCP_TOOL_NAMES[:-1]
+DEFAULT_MCP_TIMEOUT_SECONDS = 120.0
+
 from cyberrecon.queries import ticket_text  # noqa: E402
 
 
@@ -53,7 +65,17 @@ def get_ticket(incident_id: str) -> str:
     return ticket_text(incident_id)
 
 
-def create_mcp_toolset() -> McpToolset:
+def _mcp_python() -> str:
+    """Use the RAG environment for MCP when available, otherwise this interpreter."""
+    candidate = (
+        ROOT / ".venv-rag" / "Scripts" / "python.exe"
+        if os.name == "nt"
+        else ROOT / ".venv-rag" / "bin" / "python"
+    )
+    return str(candidate) if candidate.is_file() else sys.executable
+
+
+def create_mcp_toolset(tool_filter: list[str] | None = None) -> McpToolset:
     """Create the shared ADK connection to CyberRecon's local MCP server."""
     pythonpath = os.pathsep.join(
         value
@@ -62,21 +84,31 @@ def create_mcp_toolset() -> McpToolset:
     )
     mcp_env = dict(os.environ)
     mcp_env["PYTHONPATH"] = pythonpath
+    user_profile = os.getenv("USERPROFILE")
+    if user_profile:
+        hf_home = Path(user_profile) / "AppData" / "Local" / "huggingface"
+        model_cache = hf_home / "hub" / "models--sentence-transformers--all-MiniLM-L6-v2"
+        if model_cache.is_dir():
+            mcp_env["HF_HOME"] = str(hf_home)
+            mcp_env["HF_HUB_CACHE"] = str(hf_home / "hub")
+            mcp_env["HF_HUB_OFFLINE"] = "1"
     return McpToolset(
         connection_params=StdioConnectionParams(
             server_params=StdioServerParameters(
-                command=sys.executable,
+                command=_mcp_python(),
                 args=["-m", "cyberrecon.mcp_server"],
                 cwd=str(ROOT),
                 env=mcp_env,
             ),
-            timeout=30.0,
-        )
+            timeout=float(os.getenv("CYBERRECON_MCP_TIMEOUT_SECONDS", DEFAULT_MCP_TIMEOUT_SECONDS)),
+        ),
+        tool_filter=tool_filter,
     )
 
 
 MODEL = _model()
 MCP_TOOLSET = create_mcp_toolset()
+IDENTITY_MCP_TOOLSET = create_mcp_toolset(tool_filter=IDENTITY_TOOL_NAMES)
 
 coordinator = LlmAgent(
     name="InvestigationCoordinator",
@@ -103,9 +135,11 @@ Ticket:
 
 Call get_incident_events with that incident id and source network.
 For every destination IP or domain in those rows, call lookup_threat_intel.
-When useful, use the local ATT&CK tools to research candidate techniques for observed behavior.
+When useful, use search_attack_knowledge and the local ATT&CK tools to research candidate techniques for observed behavior.
+Its distance is a retrieval distance only, never confidence or attack probability.
 ATT&CK matches are reference candidates only: never mark a technique confirmed from a keyword alone.
 If you suggest a candidate, cite the incident event ids and explain the evidence-based reasoning.
+Keep ATT&CK reference knowledge separate from incident evidence.
 Quote every event id you use. Use only tool results.
 Do not decide whether the account was stolen. Report connections and intel only.
 """,
@@ -123,8 +157,9 @@ Ticket:
 {ticket_brief}
 
 Call get_incident_events with that incident id and source endpoint before you answer.
-You may use the local ATT&CK tools to research candidate techniques such as process or script execution.
-Do not claim a technique is confirmed from a keyword match; tie any candidate to observed event ids and reasoning.
+You may use search_attack_knowledge and the local ATT&CK tools to research candidate techniques such as process or script execution.
+Retrieval distance is not confidence or attack probability. Do not claim a technique is confirmed from a keyword match; tie any candidate to observed event ids and reasoning.
+Keep ATT&CK reference knowledge separate from incident evidence.
 Describe only process and file rows from that tool. Quote those event ids.
 Do not discuss network connections or login locations.
 """,
@@ -146,7 +181,7 @@ Call get_incident_events with that incident id and source identity before you an
 Describe only login rows from that tool. Quote those event ids.
 Do not discuss processes or outbound connections.
 """,
-    tools=[MCP_TOOLSET],
+    tools=[IDENTITY_MCP_TOOLSET],
     include_contents="none",
     output_key="identity_findings",
 )
