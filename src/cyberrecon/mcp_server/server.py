@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from functools import wraps
 from typing import Any, Annotated
 
 from mcp.server.mcpserver import MCPServer
@@ -29,6 +30,7 @@ from cyberrecon.mcp_server.models import (
 from cyberrecon.mcp_server.mitre import MitreDataError, load_catalog
 from cyberrecon.rag.retrieval import RetrievalError, search_attack_knowledge as retrieve_attack_knowledge
 from cyberrecon.store import connect, get_events, get_incident, get_intel
+from cyberrecon.tracing import traced_span
 
 _INCIDENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 _ALLOWED_SOURCES = {"network", "endpoint", "identity", "alert_image"}
@@ -65,7 +67,8 @@ def get_incident_events(
     source_key = _validate_source(source)
     conn = connect()
     try:
-        if get_incident(conn, incident_key) is None:
+        incident = get_incident(conn, incident_key)
+        if incident is None:
             raise ValueError("Unknown incident id")
         rows = get_events(conn, incident_key, source=source_key)
     finally:
@@ -73,6 +76,8 @@ def get_incident_events(
 
     return IncidentEventsResult(
         incident_id=incident_key,
+        provenance=incident["provenance"],
+        verification_status=incident["verification_status"],
         events=[
             IncidentEvent(
                 event_id=row["id"],
@@ -80,6 +85,8 @@ def get_incident_events(
                 source=row["source"],
                 event_type=row["event_type"],
                 payload=row["payload"],
+                provenance=row["provenance"],
+                verification_status=row["verification_status"],
             )
             for row in rows
         ],
@@ -212,6 +219,15 @@ def search_attack_knowledge(
     )
 
 
+def _traced_tool(name: str, function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with traced_span(f"mcp.tool.{name}", component="mcp-server", operation=name):
+            return function(*args, **kwargs)
+
+    return wrapped
+
+
 def create_server() -> MCPServer:
     """Create the read-only evidence, intel, and ATT&CK MCP tools."""
     server = MCPServer(
@@ -226,32 +242,32 @@ def create_server() -> MCPServer:
         name="get_incident_events",
         description="Retrieve structured evidence events for one local incident.",
         structured_output=True,
-    )(get_incident_events)
+    )(_traced_tool("get_incident_events", get_incident_events))
     server.tool(
         name="lookup_threat_intel",
         description="Look up one indicator in the local CyberRecon IOC snapshot.",
         structured_output=True,
-    )(lookup_threat_intel)
+    )(_traced_tool("lookup_threat_intel", lookup_threat_intel))
     server.tool(
         name="search_attack_techniques",
         description="Search the local MITRE ATT&CK Enterprise technique catalog.",
         structured_output=True,
-    )(search_attack_techniques)
+    )(_traced_tool("search_attack_techniques", search_attack_techniques))
     server.tool(
         name="get_attack_technique",
         description="Retrieve one local MITRE ATT&CK technique or sub-technique.",
         structured_output=True,
-    )(get_attack_technique)
+    )(_traced_tool("get_attack_technique", get_attack_technique))
     server.tool(
         name="get_attack_mitigations",
         description="Retrieve mitigations linked to a local MITRE ATT&CK technique.",
         structured_output=True,
-    )(get_attack_mitigations)
+    )(_traced_tool("get_attack_mitigations", get_attack_mitigations))
     server.tool(
         name="get_attack_tactics",
         description="Retrieve local MITRE ATT&CK tactics and technique IDs.",
         structured_output=True,
-    )(get_attack_tactics)
+    )(_traced_tool("get_attack_tactics", get_attack_tactics))
     server.tool(
         name="search_attack_knowledge",
         description=(
@@ -259,5 +275,5 @@ def create_server() -> MCPServer:
             "retrieval distances, not incident evidence or confidence scores."
         ),
         structured_output=True,
-    )(search_attack_knowledge)
+    )(_traced_tool("search_attack_knowledge", search_attack_knowledge))
     return server

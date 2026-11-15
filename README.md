@@ -75,3 +75,22 @@ $env:PYTHONPATH = "$PWD\src;$PWD"
 $env:LITELLM_LOCAL_MODEL_COST_MAP = "True"
 
 .\.venv-adk\Scripts\python.exe -u -B .\main.py adk case-b
+
+$incident = Get-Content -LiteralPath ".\data\incidents\case-b.json" -Raw | ConvertFrom-Json
+
+$body = @{ incident = $incident } | ConvertTo-Json -Depth 50
+
+$headers = @{}
+if ($env:CYBERRECON_API_TOKEN) {
+    $headers["Authorization"] = "Bearer $env:CYBERRECON_API_TOKEN"
+}
+
+$job = Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/api/investigations" `
+    -Method POST `
+    -Headers $headers `
+    -ContentType "application/json" `
+    -Body $body
+
+$job | Format-List *
+$investigationId = $job.investigation_id
