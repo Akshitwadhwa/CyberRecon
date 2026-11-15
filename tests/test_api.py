@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.datastructures import Headers
 
 from cyberrecon.api import app as api_module
 from cyberrecon.store import get_events, get_incident, init_db as store_init_db
@@ -21,7 +23,7 @@ def _write_artifacts(tmp_path):
     (run / "incident_report.md").write_text("# Report\nObserved ep-11.", encoding="utf-8")
     evaluation = tmp_path / "runs" / "evaluations"
     evaluation.mkdir(parents=True)
-    (evaluation / "case-b-20261114-202430.json").write_text(json.dumps({"schema_version": 1, "timing": {"total_duration_ms": 12}}), encoding="utf-8")
+    (evaluation / "case-b-20261114-202429.json").write_text(json.dumps({"schema_version": 1, "run_id": "20261114-202429", "timing": {"total_duration_ms": 12}}), encoding="utf-8")
     second_run = tmp_path / "runs" / "adk" / "case-c" / "20261114-202431"
     second_run.mkdir(parents=True)
     (second_run / "state.json").write_text(json.dumps({"incident_id": "case-c", "identity_findings": "Identity-only finding"}), encoding="utf-8")
@@ -76,6 +78,28 @@ def test_missing_optional_artifacts_are_reported_safely(monkeypatch):
         assert missing_evaluation.value.status_code == 404
 
 
+def test_evaluation_is_linked_to_latest_selected_run(monkeypatch):
+    with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+        root = Path(directory)
+        runs = root / "runs" / "adk" / "case-b"
+        for run_id in ("20261114-120000", "20261115-120000"):
+            run = runs / run_id
+            run.mkdir(parents=True)
+            (run / "state.json").write_text(json.dumps({"incident_id": "case-b"}), encoding="utf-8")
+        evaluations = root / "runs" / "evaluations"
+        evaluations.mkdir(parents=True)
+        for run_id, duration in (("20261114-120000", 10), ("20261115-120000", 20)):
+            (evaluations / f"case-b-{run_id}.json").write_text(
+                json.dumps({"incident_id": "case-b", "run_id": run_id, "timing": {"total_duration_ms": duration}}),
+                encoding="utf-8",
+            )
+        monkeypatch.setattr(api_module, "RUNS_DIR", root / "runs" / "adk")
+        monkeypatch.setattr(api_module, "EVALUATIONS_DIR", evaluations)
+        result = api_module.get_evaluation("case-b")
+        assert result["run_id"] == "20261115-120000"
+        assert result["metrics"]["timing"]["total_duration_ms"] == 20
+
+
 def test_dashboard_auth_rejects_missing_and_invalid_bearer_tokens(monkeypatch):
     monkeypatch.setenv(api_module.API_TOKEN_ENV, "dashboard-test-token")
     with pytest.raises(HTTPException) as missing:
@@ -90,6 +114,55 @@ def test_dashboard_auth_rejects_missing_and_invalid_bearer_tokens(monkeypatch):
 def test_cors_origins_are_explicit_and_never_wildcard(monkeypatch):
     monkeypatch.setenv(api_module.FRONTEND_ORIGINS_ENV, "https://console.example, *")
     assert api_module._frontend_origins() == ["https://console.example"]
+
+
+def test_cors_preflight_allows_frontend_post_and_auth_headers(monkeypatch):
+    monkeypatch.delenv(api_module.API_TOKEN_ENV, raising=False)
+    cors_config = next(
+        middleware.kwargs
+        for middleware in api_module.app.user_middleware
+        if middleware.cls is CORSMiddleware
+    )
+
+    cors = CORSMiddleware(lambda *_args, **_kwargs: None, **cors_config)
+    response = cors.preflight_response(
+        Headers(
+            {
+                "Origin": "http://127.0.0.1:5173",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            }
+        )
+    )
+    response_headers = dict(response.headers)
+    assert response.status_code == 200
+    assert response_headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+    assert "POST" in response_headers["access-control-allow-methods"]
+    assert "Authorization" in response_headers["access-control-allow-headers"]
+    assert "Content-Type" in response_headers["access-control-allow-headers"]
+
+
+def test_authenticated_post_remains_protected_and_allowed(monkeypatch):
+    monkeypatch.setenv(api_module.API_TOKEN_ENV, "dashboard-test-token")
+
+    class NoopExecutor:
+        def submit(self, *_args):
+            return None
+
+    monkeypatch.setattr(api_module, "_executor", NoopExecutor())
+    monkeypatch.setattr(api_module, "_persist_submitted_incident", lambda *_args: None)
+    payload = {"description": "A suspicious attachment triggered an outbound connection."}
+
+    with pytest.raises(HTTPException) as unauthorized:
+        api_module.require_api_auth(None)
+    assert unauthorized.value.status_code == 401
+    assert api_module.require_api_auth("Bearer dashboard-test-token") is None
+
+    result = api_module.create_investigation(
+        api_module.InvestigationSubmission(description=payload["description"])
+    )
+    assert result.status == "pending"
+    assert result.investigation_id.startswith("submitted-")
 
 
 def test_submission_persists_narrative_and_returns_async_job(monkeypatch):

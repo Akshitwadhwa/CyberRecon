@@ -32,21 +32,28 @@ def build_evaluation_report(
     run_folder: Path,
     total_duration_ms: float,
     monitor: LifecycleMonitoringPlugin,
+    span_records: list[dict[str, Any]] | None = None,
+    status: str = "completed",
 ) -> dict[str, Any]:
     state_path = run_folder / "state.json"
     report_path = run_folder / "incident_report.md"
-    state = json.loads(state_path.read_text(encoding="utf-8"))
-    report_text = report_path.read_text(encoding="utf-8")
+    state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.is_file() else {}
+    report_text = report_path.read_text(encoding="utf-8") if report_path.is_file() else ""
 
-    grounding = {"checked": True, "passed": False, "reason": None}
-    try:
-        assert_grounded(incident_id, report_text)
-        grounding["passed"] = True
-    except ValueError as exc:
-        grounding["reason"] = str(exc)
+    grounding = {"checked": bool(report_text), "passed": None, "reason": None}
+    if report_text:
+        grounding["passed"] = False
+        try:
+            assert_grounded(incident_id, report_text)
+            grounding["passed"] = True
+        except ValueError as exc:
+            grounding["reason"] = str(exc)
 
     mappings: dict[str, Any] = {}
     for key in ("network_findings", "endpoint_findings"):
+        if not state.get(key):
+            mappings[key] = {"valid": None, "count": None, "reason": "unavailable"}
+            continue
         try:
             values = parse_attack_mappings(incident_id, str(state.get(key) or ""))
             mappings[key] = {
@@ -58,7 +65,7 @@ def build_evaluation_report(
         except ValueError as exc:
             mappings[key] = {"valid": False, "reason": str(exc)}
 
-    spans = get_span_records()
+    spans = span_records if span_records is not None else get_span_records()
     a2a_spans = [item for item in spans if item["name"] == "a2a.client.request"]
     mcp_tools: dict[str, list[float]] = {}
     for item in monitor.metrics["tool_durations_ms"]:
@@ -75,13 +82,17 @@ def build_evaluation_report(
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "incident_id": incident_id,
+        "run_id": run_folder.name,
+        "status": status,
         "run_folder": str(run_folder),
         "timing": {
             "total_duration_ms": round(total_duration_ms, 3),
             "agent_durations_ms": monitor.metrics["agent_durations_ms"],
             "mcp_tool_durations_ms": mcp_tools,
-            "a2a_duration_ms": a2a_spans[0]["duration_ms"] if a2a_spans else None,
-            "rag_retrieval_durations_ms": rag_durations,
+            "a2a_duration_ms": round(sum(item["duration_ms"] for item in a2a_spans), 3) if a2a_spans else None,
+            "rag_retrieval_durations_ms": rag_durations or None,
+            "mcp_tool_calls": len(monitor.metrics["tool_durations_ms"]) or None,
+            "rag_calls": len(rag_durations) or None,
         },
         "llm": {
             "token_usage": usage,
@@ -93,7 +104,7 @@ def build_evaluation_report(
         "errors": monitor.metrics["errors"],
         "trace": {
             "trace_id": spans[0]["trace_id"] if spans else None,
-            "span_count": len(spans),
+            "span_count": len(spans) or None,
         },
     }
 
@@ -107,6 +118,7 @@ async def evaluate_case(incident_id: str = "case-b", output_root: Path | None = 
         incident_id,
         monitor=monitor,
         validate_outputs=False,
+        auto_evaluate=False,
     )
     report = build_evaluation_report(
         incident_id=incident_id,

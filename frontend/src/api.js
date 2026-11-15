@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const API_BASE = import.meta.env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 async function getJson(path) {
   const response = await fetch(`${API_BASE}${path}`)
@@ -28,6 +28,19 @@ export function submitInvestigation(payload) {
 
 export function getInvestigationStatus(investigationId) {
   return getJson(`/api/investigations/${encodeURIComponent(investigationId)}/status`)
+}
+
+export function normalizeEvaluationMetrics(evaluation) {
+  const metrics = evaluation?.metrics || {}
+  return {
+    totalMs: metrics.timing?.total_duration_ms ?? null,
+    a2aMs: metrics.timing?.a2a_duration_ms ?? null,
+    tokens: metrics.llm?.token_usage?.total_token_count ?? metrics.llm?.token_usage?.total_tokens ?? null,
+    spans: metrics.trace?.span_count ?? null,
+    grounded: metrics.grounding?.passed ?? null,
+    mcpCalls: metrics.timing?.mcp_tool_calls ?? null,
+    ragCalls: metrics.timing?.rag_calls ?? (metrics.timing?.rag_retrieval_durations_ms ? metrics.timing.rag_retrieval_durations_ms.length : null),
+  }
 }
 
 function eventTone(source, type) {
@@ -86,7 +99,7 @@ export async function fetchDashboard(incidentId) {
     overview: section('What happened', 'Supporting evidence'),
     events,
     mappings,
-    metrics: { totalMs: metrics.timing?.total_duration_ms || 0, a2aMs: metrics.timing?.a2a_duration_ms || null, tokens: metrics.llm?.token_usage?.total_token_count || null, spans: metrics.trace?.span_count || 0, grounded: metrics.grounding?.passed ?? null, ragCalls: metrics.timing?.rag_retrieval_durations_ms?.length || 0 },
+    metrics: normalizeEvaluationMetrics(evaluation),
     findings: { network: state.network_findings || 'Unavailable.', endpoint: state.endpoint_findings || 'Unavailable.', identity: state.identity_findings || 'Unavailable.' },
     report: { happened: section('What happened', 'Supporting evidence'), conflict: section('Where evidence conflicts', 'Most likely explanation'), explanation: section('Most likely explanation', 'Recommended response'), response: section('Recommended response', '__END__') },
   }

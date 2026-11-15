@@ -173,8 +173,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_frontend_origins(),
     allow_credentials=False,
-    allow_methods=["GET"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -407,6 +407,24 @@ def _evaluation_files(incident_id: str) -> list[Path]:
     )
 
 
+def _evaluation_for_run(incident_id: str, run: Path) -> Path | None:
+    """Find metrics explicitly linked to the selected run, never another run."""
+    expected_name = f"{incident_id}-{run.name}.json"
+    for path in _evaluation_files(incident_id):
+        if path.name == expected_name:
+            return path
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if payload.get("run_id") == run.name:
+            return path
+        run_folder = payload.get("run_folder")
+        if isinstance(run_folder, str) and Path(run_folder).name == run.name:
+            return path
+    return None
+
+
 def _latest_run(incident_id: str) -> Path:
     runs = _run_dirs(incident_id)
     if not runs:
@@ -444,7 +462,7 @@ def list_investigations() -> list[InvestigationSummary]:
                 latest_run=latest.name if latest else None,
                 has_state=bool(latest and (latest / "state.json").is_file()),
                 has_report=bool(latest and (latest / "incident_report.md").is_file()),
-                has_evaluation=bool(evaluations),
+                has_evaluation=bool(latest and _evaluation_for_run(incident_id, latest)),
             )
         )
     return summaries
@@ -506,7 +524,8 @@ def get_evaluation(
     incident_id: str = ApiPath(..., pattern=INCIDENT_ID_PATTERN.pattern),
 ) -> dict[str, Any]:
     incident_id = _validate_incident_id(incident_id)
-    files = _evaluation_files(incident_id)
-    if not files:
+    run = _latest_run(incident_id)
+    evaluation = _evaluation_for_run(incident_id, run)
+    if evaluation is None:
         raise HTTPException(status_code=404, detail="Evaluation metrics not found")
-    return {"incident_id": incident_id, "metrics": _read_json(files[0])}
+    return {"incident_id": incident_id, "run_id": run.name, "metrics": _read_json(evaluation)}
