@@ -79,13 +79,26 @@ jobs:
       - name: Start the real local deployment stack
         run: |
           ./scripts/render_start.sh >/tmp/cyberrecon-render-start.log 2>&1 &
-          echo $! >/tmp/cyberrecon-render-start.pid
-          for attempt in $(seq 1 90); do
+          STACK_PID=$!
+          echo "$STACK_PID" >/tmp/cyberrecon-render-start.pid
+          health_ok=false
+          for attempt in $(seq 1 180); do
             if curl --silent --fail http://127.0.0.1:10000/api/health >/dev/null; then
+              health_ok=true
               break
+            fi
+            if ! kill -0 "$STACK_PID" 2>/dev/null; then
+              echo 'render_start_exited_before_fastapi_health' >&2
+              cat /tmp/cyberrecon-render-start.log >&2 || true
+              exit 1
             fi
             sleep 1
           done
+          if [ "$health_ok" != true ]; then
+            echo 'fastapi_health_timeout' >&2
+            cat /tmp/cyberrecon-render-start.log >&2 || true
+            exit 1
+          fi
           curl --fail --silent http://127.0.0.1:10000/api/health
           curl --fail --silent http://127.0.0.1:8765/.well-known/agent-card.json >/tmp/cyberrecon-agent-card.json
           python - <<'PY'
