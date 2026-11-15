@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 from adk_app.agent import (
@@ -25,7 +26,15 @@ def test_mcp_toolset_uses_adk_interpreter_and_project_paths():
     params = MCP_TOOLSET.connection_params
     server = params.server_params
 
-    assert server.command.endswith("python.exe")
+    project_root = Path(server.cwd).resolve()
+    python_relative_path = (
+        Path(".venv-rag") / "Scripts" / "python.exe"
+        if os.name == "nt"
+        else Path(".venv-rag") / "bin" / "python"
+    )
+    expected_mcp_python = (project_root / python_relative_path).resolve()
+    assert Path(server.command).resolve() == expected_mcp_python
+    assert expected_mcp_python.is_file()
     assert server.args == ["-m", "cyberrecon.mcp_server"]
     assert Path(server.cwd).name == "CyberRecon"
     assert str(Path(server.cwd) / "src") in server.env["PYTHONPATH"]
