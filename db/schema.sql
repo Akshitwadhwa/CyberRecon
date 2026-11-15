@@ -5,7 +5,9 @@ CREATE TABLE IF NOT EXISTS incidents (
     title TEXT NOT NULL,
     t_start TEXT NOT NULL,
     t_end TEXT NOT NULL,
-    ticket_text TEXT NOT NULL
+    ticket_text TEXT NOT NULL,
+    provenance TEXT NOT NULL DEFAULT 'seeded' CHECK (provenance IN ('seeded', 'user_submitted')),
+    verification_status TEXT NOT NULL DEFAULT 'verified' CHECK (verification_status IN ('verified', 'unverified'))
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -15,6 +17,8 @@ CREATE TABLE IF NOT EXISTS events (
     source TEXT NOT NULL CHECK (source IN ('network', 'endpoint', 'identity', 'alert_image')),
     event_type TEXT NOT NULL,
     payload TEXT NOT NULL,
+    provenance TEXT NOT NULL DEFAULT 'seeded' CHECK (provenance IN ('seeded', 'user_submitted')),
+    verification_status TEXT NOT NULL DEFAULT 'verified' CHECK (verification_status IN ('verified', 'unverified')),
     FOREIGN KEY (incident_id) REFERENCES incidents (id)
 );
 

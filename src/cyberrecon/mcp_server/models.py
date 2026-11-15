@@ -7,6 +7,8 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 Source = Literal["network", "endpoint", "identity", "alert_image"]
+Provenance = Literal["seeded", "user_submitted"]
+VerificationStatus = Literal["verified", "unverified"]
 IncidentId = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")]
 Indicator = Annotated[str, Field(min_length=1, max_length=512)]
 
@@ -19,12 +21,16 @@ class IncidentEvent(BaseModel):
     source: Source
     event_type: str = Field(min_length=1)
     payload: dict[str, Any]
+    provenance: Provenance
+    verification_status: VerificationStatus
 
 
 class IncidentEventsResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     incident_id: str = Field(min_length=1)
+    provenance: Provenance = "seeded"
+    verification_status: VerificationStatus = "verified"
     events: list[IncidentEvent]
 
 

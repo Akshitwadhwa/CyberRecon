@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 Severity = Literal["low", "medium", "high", "critical"]
 Confidence = Literal["low", "medium", "high"]
+AttackMappingStatus = Literal["candidate", "supported", "confirmed"]
+EvidenceProvenance = Literal["seeded", "user_submitted"]
+VerificationStatus = Literal["verified", "unverified"]
 
 
 class EvidenceReference(BaseModel):
@@ -17,6 +20,20 @@ class EvidenceReference(BaseModel):
     timestamp: str | None = None
     source: Literal["identity", "endpoint", "network", "alert_image"]
     summary: str = Field(min_length=1)
+    provenance: EvidenceProvenance = "seeded"
+    verification_status: VerificationStatus = "verified"
+
+
+class AttackTechniqueMapping(BaseModel):
+    """An ATT&CK hypothesis explicitly tied to incident evidence."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    technique_id: str = Field(pattern=r"^T\d{4}(?:\.\d{3})?$")
+    technique_name: str = Field(min_length=1, max_length=256)
+    supporting_event_ids: list[str] = Field(min_length=1)
+    rationale: str = Field(min_length=1, max_length=2000)
+    status: AttackMappingStatus
 
 
 class SpecialistFinding(BaseModel):
@@ -27,6 +44,7 @@ class SpecialistFinding(BaseModel):
     evidence: list[EvidenceReference] = Field(default_factory=list)
     uncertainty: str = Field(default="", max_length=2000)
     confidence: Confidence | None = None
+    attack_mappings: list[AttackTechniqueMapping] = Field(default_factory=list)
 
 
 class ReconciliationFinding(BaseModel):

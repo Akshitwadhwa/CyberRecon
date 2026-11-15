@@ -23,9 +23,16 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from adk_app.agent import root_agent  # noqa: E402
-from cyberrecon.guardrails import assert_grounded  # noqa: E402
+from adk_app.callbacks import LifecycleMonitoringPlugin  # noqa: E402
+from cyberrecon.guardrails import (  # noqa: E402
+    assert_grounded,
+    ensure_attack_mapping_section,
+    parse_attack_mappings,
+)
 from cyberrecon.ingest import run as ingest  # noqa: E402
 from cyberrecon.a2a_client import invoke_crewai  # noqa: E402
+from cyberrecon.store import connect, get_events  # noqa: E402
+from cyberrecon.safe_errors import redacted_exception_line  # noqa: E402
 
 APP_NAME = "cyberrecon_adk"
 USER_ID = "analyst"
@@ -52,7 +59,33 @@ def _text_from_event(event) -> str:
     return "\n".join(chunks).strip()
 
 
-async def run_investigation(incident_id: str) -> Path:
+def _append_evidence_trust(incident_id: str, report: str) -> str:
+    """Add deterministic trust labels for cited events to the saved report."""
+    from cyberrecon.guardrails import cited_event_ids
+
+    cited = cited_event_ids(report)
+    if not cited:
+        return report
+    conn = connect()
+    try:
+        rows = {row["id"].lower(): row for row in get_events(conn, incident_id)}
+    finally:
+        conn.close()
+    labels = [
+        f"- {event_id}: provenance={rows[event_id]['provenance']}; verification_status={rows[event_id]['verification_status']}"
+        for event_id in cited
+        if event_id in rows
+    ]
+    if not labels:
+        return report
+    return report.rstrip() + "\n\n## Evidence trust\n" + "\n".join(labels) + "\n"
+
+
+async def run_investigation(
+    incident_id: str,
+    monitor: LifecycleMonitoringPlugin | None = None,
+    validate_outputs: bool = True,
+) -> Path:
     ingest()
     initial_state = {"incident_id": incident_id}
     crewai_a2a_url = os.getenv("CREWAI_A2A_URL", "").strip()
@@ -71,7 +104,13 @@ async def run_investigation(incident_id: str) -> Path:
         session_id=session_id,
         state=initial_state,
     )
-    runner = Runner(agent=root_agent, app_name=APP_NAME, session_service=session_service)
+    monitor = monitor or LifecycleMonitoringPlugin()
+    runner = Runner(
+        agent=root_agent,
+        app_name=APP_NAME,
+        session_service=session_service,
+        plugins=[monitor],
+    )
     message = types.Content(
         role="user",
         parts=[types.Part(text=f"Investigate incident {incident_id}.")],
@@ -90,9 +129,16 @@ async def run_investigation(incident_id: str) -> Path:
         app_name=APP_NAME, user_id=USER_ID, session_id=session_id
     )
     state = dict(session.state)
+    if validate_outputs:
+        for specialist_key in ("network_findings", "endpoint_findings"):
+            state[specialist_key] = ensure_attack_mapping_section(
+                str(state.get(specialist_key) or "")
+            )
+            parse_attack_mappings(incident_id, str(state.get(specialist_key) or ""))
     report = str(state.get("incident_report") or "")
-    if report:
+    if report and validate_outputs:
         assert_grounded(incident_id, report)
+        report = _append_evidence_trust(incident_id, report)
 
     folder = ROOT / "runs" / "adk" / incident_id / datetime.now().strftime("%Y%m%d-%H%M%S")
     folder.mkdir(parents=True, exist_ok=True)
@@ -113,6 +159,17 @@ async def run_investigation(incident_id: str) -> Path:
     return folder
 
 
-if __name__ == "__main__":
+def main() -> None:
     case_id = sys.argv[1] if len(sys.argv) > 1 else "case-b"
-    asyncio.run(run_investigation(case_id))
+    try:
+        asyncio.run(run_investigation(case_id))
+    except Exception as error:
+        print(
+            "adk_process_error " + redacted_exception_line(error, stage="adk_execution"),
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from None
+
+
+if __name__ == "__main__":
+    main()
