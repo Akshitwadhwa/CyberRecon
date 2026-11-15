@@ -1,0 +1,142 @@
+name: Linux deployment validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_live_investigation:
+        description: Run the real case-b ADK -> A2A -> CrewAI investigation
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  linux-validation:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      HF_HUB_CACHE: ${{ github.workspace }}/.cache/huggingface/hub
+      LLM_MODEL: openai/gpt-4o-mini
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CYBERRECON_A2A_TOKEN: ${{ secrets.CYBERRECON_A2A_TOKEN }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: huggingface-all-minilm-${{ runner.os }}-${{ hashFiles('requirements-rag.txt') }}
+
+      - name: Record runner resources
+        run: |
+          python --version
+          python -m pip --version
+          uname -a
+          free -h
+          df -h .
+
+      - name: Install the Render dependency profiles and build local data
+        run: bash scripts/render_build.sh
+
+      - name: Verify dependency health
+        run: |
+          .venv-adk/bin/python -m pip check
+          .venv-crewai/bin/python -m pip check
+          .venv-rag/bin/python -m pip check
+
+      - name: Measure framework imports and memory
+        run: |
+          set -o pipefail
+          /usr/bin/time -v timeout 120s .venv-crewai/bin/python -c 'import crewai; print("crewai_import_ok")'
+          /usr/bin/time -v timeout 120s .venv-crewai/bin/python -c 'import litellm; print("litellm_import_ok")'
+          /usr/bin/time -v timeout 120s .venv-adk/bin/python -c 'import google.adk; print("adk_import_ok")'
+          /usr/bin/time -v timeout 120s .venv-rag/bin/python -c 'import chromadb; print("chromadb_import_ok")'
+          /usr/bin/time -v timeout 120s .venv-rag/bin/python -c 'import mcp; print("mcp_import_ok")'
+
+      - name: Run targeted Linux regression tests
+        run: |
+          .venv-adk/bin/python -m pytest -q tests/test_api.py tests/test_adk_smoke.py
+          .venv-adk/bin/python -m pytest -q tests/test_adk_mcp_integration.py
+          .venv-rag/bin/python -m pytest -q tests/test_mcp_server.py
+          .venv-rag/bin/python -m pytest -q tests/test_rag_documents.py tests/test_rag_index.py tests/test_rag_retrieval.py
+
+      - name: Start the real local deployment stack
+        run: |
+          ./scripts/render_start.sh >/tmp/cyberrecon-render-start.log 2>&1 &
+          echo $! >/tmp/cyberrecon-render-start.pid
+          for attempt in $(seq 1 90); do
+            if curl --silent --fail http://127.0.0.1:10000/api/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:10000/api/health
+          curl --fail --silent http://127.0.0.1:8765/.well-known/agent-card.json >/tmp/cyberrecon-agent-card.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          card = json.loads(Path('/tmp/cyberrecon-agent-card.json').read_text())
+          assert card.get('name') == 'CyberRecon CrewAI Investigator'
+          print('agent_card_ok')
+          PY
+
+      - name: Verify A2A endpoint validation without running an investigation
+        run: |
+          status=$(curl --silent --output /tmp/cyberrecon-a2a-error.json --write-out '%{http_code}' \
+            -X POST http://127.0.0.1:8765/a2a \
+            -H 'Content-Type: application/json' \
+            --data '{"jsonrpc":"2.0","id":"ci","method":"invalid","params":{}}')
+          test "$status" = "400"
+          echo "a2a_validation_status=$status"
+
+      - name: Check stack shutdown
+        if: always()
+        run: |
+          if test -f /tmp/cyberrecon-render-start.pid; then
+            kill "$(cat /tmp/cyberrecon-render-start.pid)" 2>/dev/null || true
+            for attempt in $(seq 1 20); do
+              if ! kill -0 "$(cat /tmp/cyberrecon-render-start.pid)" 2>/dev/null; then
+                echo "stack_shutdown_ok"
+                break
+              fi
+              sleep 1
+            done
+          fi
+          if test -f /tmp/cyberrecon-render-start.log; then
+            tail -n 80 /tmp/cyberrecon-render-start.log
+          fi
+
+      - name: Run optional real case-b investigation
+        if: ${{ inputs.run_live_investigation == true }}
+        run: |
+          if test -z "${OPENAI_API_KEY:-}"; then
+            echo 'run_live_investigation was requested, but OPENAI_API_KEY is not configured.' >&2
+            exit 1
+          fi
+          ./scripts/render_start.sh >/tmp/cyberrecon-live-start.log 2>&1 &
+          echo $! >/tmp/cyberrecon-live-start.pid
+          trap 'kill "$(cat /tmp/cyberrecon-live-start.pid)" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 90); do
+            curl --silent --fail http://127.0.0.1:10000/api/health >/dev/null && break
+            sleep 1
+          done
+          timeout 900s .venv-adk/bin/python main.py adk case-b
+
+      - name: Explain skipped live investigation
+        if: ${{ inputs.run_live_investigation != true }}
+        run: echo 'Live case-b investigation skipped; enable it manually and provide OPENAI_API_KEY as a repository secret.'
