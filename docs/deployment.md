@@ -121,7 +121,72 @@ python scripts/build_mitre_index.py
 python main.py ingest
 ```
 
-The current API binds to `127.0.0.1:8000`, and A2A defaults to `127.0.0.1:8765`. A production deployment will need deployment-specific bind/entrypoint configuration so intended peers can connect. That is a later deployment change, not implemented here.
+The local API entry point still defaults to `127.0.0.1:8000`, while the Render entry point binds Uvicorn to `0.0.0.0:$PORT`. The Render start script keeps the CrewAI A2A service private on `127.0.0.1:8765` and points ADK at it through `CREWAI_A2A_URL`.
+
+## Render Free and Vercel Hobby preparation
+
+The repository includes `render.yaml`, `scripts/render_build.sh` and
+`scripts/render_start.sh`. The Render Blueprint uses one Free web service and
+starts the API, CrewAI A2A service and ADK-local MCP subprocess from the
+existing isolated dependency profiles. The service exposes only FastAPI's
+public port; A2A remains loopback-only and MCP remains stdio.
+
+Render Free has an important limitation: its filesystem is ephemeral and free
+services spin down after inactivity. The build script therefore recreates the
+SQLite seed database and MITRE Chroma index from the versioned input data on
+each build. Generated reports, submitted incidents and evaluation artifacts
+are not durable across a restart or redeploy on this tier. Durable history
+requires a paid persistent disk or an external storage service, neither of
+which is part of this free-tier preparation.
+
+To deploy the backend, create a Render Blueprint from this repository and set
+the secret/environment values in the Render dashboard. Set
+`CYBERRECON_FRONTEND_ORIGINS` to the exact Vercel HTTPS origin, for example
+`https://your-project.vercel.app`. Set `OPENAI_API_KEY`,
+`CYBERRECON_A2A_TOKEN` and (for a protected API) `CYBERRECON_API_TOKEN` as
+Render secrets; do not put them in `render.yaml`.
+
+For Vercel, set the project root directory to `frontend`, build command to
+`npm run build`, and output directory to `dist`. Set the non-secret
+`VITE_API_BASE_URL` to the deployed Render URL before building. The static
+frontend must not receive `OPENAI_API_KEY` or `CYBERRECON_API_TOKEN`: Vite
+`VITE_*` values are compiled into browser JavaScript. The current backend keeps
+token authentication available, but a public browser cannot safely use a
+shared bearer token without exposing it to the user. For a protected public
+dashboard, put an identity-aware gateway in front of the API or add a reviewed
+user-authentication flow before enabling `CYBERRECON_API_TOKEN`; for a private
+demo, restrict access at the network/account layer rather than bundling the
+service token.
+
+Local validation commands:
+
+```powershell
+# Backend source checks (PowerShell)
+$env:PYTHONPATH = "$PWD\src;$PWD"
+.\.venv-adk\Scripts\python.exe -m pytest -q
+.\.venv-adk\Scripts\python.exe -m pip check
+
+# Frontend build
+Set-Location frontend
+npm ci
+npm run build
+Set-Location ..
+```
+
+The actual Render and Vercel URLs, build logs and health checks must be
+verified after deployment; repository preparation alone is not deployment
+evidence.
+
+## Linux validation
+
+`.github/workflows/linux-validation.yml` is a manual Ubuntu 22.04 validation
+workflow. It uses the same `scripts/render_build.sh` and
+`scripts/render_start.sh` paths as Render, measures import duration and peak
+RSS with `/usr/bin/time -v`, runs the real MCP stdio and ADK integration tests,
+checks the Agent Card and API health endpoint, and verifies clean shutdown.
+The live `case-b` investigation is opt-in through the
+`run_live_investigation` workflow input and requires an `OPENAI_API_KEY`
+repository secret; it is never run implicitly by CI.
 
 ## Environment variables and secret management
 
