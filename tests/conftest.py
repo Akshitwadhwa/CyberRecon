@@ -14,7 +14,8 @@ sys.path.insert(0, str(ROOT / "src"))
 # ADK constructs its declarative LLM agents at module import time. Tests only
 # need a non-empty placeholder to construct LiteLlm; no test performs a live
 # model call. Production code still rejects a missing real credential.
-os.environ.setdefault("OPENAI_API_KEY", "ci-test-placeholder")
+if not os.environ.get("OPENAI_API_KEY", "").strip():
+    os.environ["OPENAI_API_KEY"] = "ci-test-placeholder"
 
 from cyberrecon.paths import INCIDENTS_DIR, INTEL_PATH
 from cyberrecon.store import ingest_incident, ingest_intel, init_db

@@ -23,7 +23,6 @@ jobs:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
       HF_HUB_CACHE: ${{ github.workspace }}/.cache/huggingface/hub
       LLM_MODEL: openai/gpt-4o-mini
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       CYBERRECON_A2A_TOKEN: ${{ secrets.CYBERRECON_A2A_TOKEN }}
 
     steps:
@@ -69,6 +68,8 @@ jobs:
           /usr/bin/time -v timeout 120s .venv-rag/bin/python -c 'import mcp; print("mcp_import_ok")'
 
       - name: Run targeted Linux regression tests
+        env:
+          OPENAI_API_KEY: ci-test-placeholder
         run: |
           .venv-adk/bin/python -m pytest -q tests/test_api.py tests/test_adk_smoke.py
           .venv-adk/bin/python -m pytest -q tests/test_adk_mcp_integration.py
@@ -123,6 +124,8 @@ jobs:
 
       - name: Run optional real case-b investigation
         if: ${{ inputs.run_live_investigation == true }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           if test -z "${OPENAI_API_KEY:-}"; then
             echo 'run_live_investigation was requested, but OPENAI_API_KEY is not configured.' >&2
